@@ -6,15 +6,12 @@ import { port } from "./config";
 
 const app = express();
 
-// Middleware
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
-// Routes
 app.use("/", routes);
 
-// Error handling
 app.use(
   (
     err: Error,
@@ -27,7 +24,6 @@ app.use(
   }
 );
 
-// Start server
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });
