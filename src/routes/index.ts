@@ -8,7 +8,7 @@ import {
 import { asyncHandler } from "../helpers.ts/error";
 import {
   convertBRLToSats,
-  getBTCPriceInBRL,
+  getBTCPriceData,
 } from "../services/conversion.service";
 
 const router = Router();
@@ -61,7 +61,7 @@ router.get(
 
 router.get(
   "/convert-sats",
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  async (req: Request, res: Response, next: NextFunction) => {
     const brlQuery = req.query.brl;
     if (!brlQuery) {
       res.status(400).json({
@@ -70,28 +70,26 @@ router.get(
       });
       return;
     }
-
     const brlAmount = parseFloat(brlQuery as string);
     if (isNaN(brlAmount)) {
       res.status(400).json({ error: "Invalid BRL amount provided." });
       return;
     }
-
     try {
-      const btcPriceInBRL = await getBTCPriceInBRL();
-      const sats = convertBRLToSats(brlAmount, btcPriceInBRL);
+      // Get the cached price data (price + last updated timestamp)
+      const btcPriceData = await getBTCPriceData();
+      const sats = convertBRLToSats(brlAmount, btcPriceData.price);
       res.json({
         brl: brlAmount,
-        btcPriceInBRL,
+        btcPriceInBRL: btcPriceData.price,
         sats,
+        lastUpdatedTime: btcPriceData.lastUpdated,
       });
     } catch (error) {
       console.error("Error during conversion:", error);
-      res
-        .status(500)
-        .json({
-          error: "Failed to convert BRL to satoshis. Please try again later.",
-        });
+      res.status(500).json({
+        error: "Failed to convert BRL to satoshis. Please try again later.",
+      });
     }
   }
 );
