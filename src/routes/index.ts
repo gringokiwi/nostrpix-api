@@ -20,6 +20,41 @@ import {
 const router = Router();
 
 router.get(
+  "/convert-sats",
+  async_handler(async (req: Request, res: Response) => {
+    const brlQuery = req.query.brl;
+    if (!brlQuery) {
+      res.status(400).json({
+        error:
+          "Please provide a 'brl' query parameter, e.g., /convert-sats?brl=100",
+      });
+      return;
+    }
+    const brlAmount = parseFloat(brlQuery as string);
+    if (isNaN(brlAmount)) {
+      res.status(400).json({ error: "Invalid BRL amount provided." });
+      return;
+    }
+    try {
+      // Get the cached price data (price + last updated timestamp)
+      const btcPriceData = await getBTCPriceData();
+      const sats = convertBRLToSats(brlAmount, btcPriceData.price);
+      res.json({
+        brl: brlAmount,
+        btcPriceInBRL: btcPriceData.price,
+        sats,
+        lastUpdatedTime: btcPriceData.lastUpdated,
+      });
+    } catch (error) {
+      console.error("Error during conversion:", error);
+      res.status(500).json({
+        error: "Failed to convert BRL to satoshis. Please try again later.",
+      });
+    }
+  })
+);
+
+router.get(
   "/admin/balance",
   async_handler(async (req, res) => {
     const response = await get_admin_balance_brl();
@@ -121,41 +156,6 @@ router.get(
       error: "Missing either qr_code, or both/either pix_key and amount",
     });
   })
-);
-
-router.get(
-  "/convert-sats",
-  async (req: Request, res: Response, next: NextFunction) => {
-    const brlQuery = req.query.brl;
-    if (!brlQuery) {
-      res.status(400).json({
-        error:
-          "Please provide a 'brl' query parameter, e.g., /convert-sats?brl=100",
-      });
-      return;
-    }
-    const brlAmount = parseFloat(brlQuery as string);
-    if (isNaN(brlAmount)) {
-      res.status(400).json({ error: "Invalid BRL amount provided." });
-      return;
-    }
-    try {
-      // Get the cached price data (price + last updated timestamp)
-      const btcPriceData = await getBTCPriceData();
-      const sats = convertBRLToSats(brlAmount, btcPriceData.price);
-      res.json({
-        brl: brlAmount,
-        btcPriceInBRL: btcPriceData.price,
-        sats,
-        lastUpdatedTime: btcPriceData.lastUpdated,
-      });
-    } catch (error) {
-      console.error("Error during conversion:", error);
-      res.status(500).json({
-        error: "Failed to convert BRL to satoshis. Please try again later.",
-      });
-    }
-  }
 );
 
 export default router;
