@@ -8,6 +8,7 @@ import {
 import { encode } from "base-64";
 import { processPixAmount, processPixKey } from "../helpers.ts/pix";
 import {
+  BalanceResponse,
   DepositResponse,
   DictLookupResponse,
   WithdrawalResponse,
@@ -65,6 +66,13 @@ export const getDepositQr = async ({
     })
     .then((response) => response.data as DepositResponse);
   return depositResponse.payload;
+};
+
+export const getBalance = async () => {
+  const { available } = await sqalaApiClient
+    .get(`/recipients/DEFAULT/balance`)
+    .then((response) => response.data as BalanceResponse);
+  return available / 100;
 };
 
 export const payPixQr = async (qrcode: string) => {

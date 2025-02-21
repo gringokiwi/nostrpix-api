@@ -66,3 +66,7 @@ export interface WithdrawalResponse {
     [key: string]: string;
   };
 }
+
+export interface BalanceResponse {
+  available: number;
+}
