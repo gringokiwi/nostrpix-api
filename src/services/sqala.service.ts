@@ -15,20 +15,21 @@ const sqalaApiClient = axios.create({
   },
 });
 
-sqalaApiClient.interceptors.request.use(async (config) => {
+sqalaApiClient.interceptors.request.use(
+  async (config) => {
   if (config.url === "/access-tokens") {
     config.headers.Authorization =
       "Basic " + encode(sqalaAppId + ":" + sqalaAppSecret);
     return config;
   }
-  try {
     const token = await getAccessToken();
     config.headers.Authorization = `Bearer ${token}`;
-  } catch (error) {
-    console.error("Error setting authentication header:", error);
-  }
   return config;
-});
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
 
 let accessToken: string | null = null;
 let tokenExpiryTime: number | null = null;
@@ -37,17 +38,16 @@ const getAccessToken = async (): Promise<string> => {
   if (accessToken && tokenExpiryTime && Date.now() < tokenExpiryTime) {
     return accessToken;
   }
-  try {
-    const response = await sqalaApiClient.post("/access-tokens", {
+      const response = await sqalaApiClient.post("/access-tokens", {
       refreshToken: sqalaRefreshToken,
     });
-    accessToken = response.data.token as string;
-    tokenExpiryTime = response.data.expiresIn as number;
-    return accessToken;
-  } catch (error) {
-    throw error;
+if (!response.data?.token) {
+    throw new Error("Invalid token response from server");
   }
-};
+    accessToken = response.data.token as string;
+    tokenExpiryTime = Date.now() + response.data.expiresIn * 1000;
+    return accessToken;
+  };
 
 export const topupAccount = async ({
   amountDecimal,
