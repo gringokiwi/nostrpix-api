@@ -1,18 +1,14 @@
 import { Router } from "express";
-import {
-  topupAccount,
-  lookupPixQr,
-  payStaticPix,
-} from "../services/sqala.service";
+import { getDepositQr, payPixQr, payPixKey } from "../services/sqala.service";
 import { parseError, asyncHandler } from "../helpers.ts/error";
 
 const router = Router();
 
 router.get(
-  "/topup/:amount",
+  "/deposit",
   asyncHandler(async (req, res) => {
-    const depositQr = await topupAccount({
-      amountDecimal: Number(req.params.amount),
+    const depositQr = await getDepositQr({
+      amountDecimal: Number(req.query.amount),
     });
     res.json({
       depositQr,
@@ -21,17 +17,17 @@ router.get(
 );
 
 router.get(
-  "/pay-pix",
+  "/pay",
   asyncHandler(async (req, res) => {
     if (req.query.qrCode) {
-      const lookupResponse = await lookupPixQr(req.query.qrCode as string);
+      const lookupResponse = await payPixQr(req.query.qrCode as string);
       return res.json({
         lookupResponse,
       });
     }
 
     if (req.query.pixKey && req.query.amount) {
-      const success = await payStaticPix({
+      const success = await payPixKey({
         pixKey: req.query.pixKey as string,
         amountDecimal: Number(req.query.amount),
       });
