@@ -20,6 +20,14 @@ import {
 const router = Router();
 
 router.get(
+  "/admin/balance",
+  async_handler(async (req, res) => {
+    const response = await get_admin_balance_brl();
+    res.json(response);
+  })
+);
+
+router.get(
   "/admin/deposit",
   async_handler(async (req, res) => {
     if (isNaN(Number(req.query.amount))) {
@@ -30,14 +38,6 @@ router.get(
     const response = await get_admin_deposit_qr({
       amount_decimal: Number(req.query.amount),
     });
-    res.json(response);
-  })
-);
-
-router.get(
-  "/admin/balance",
-  async_handler(async (req, res) => {
-    const response = await get_admin_balance_brl();
     res.json(response);
   })
 );
