@@ -4,46 +4,44 @@ import {
   lookupPixQr,
   payStaticPix,
 } from "../services/sqala.service";
-import { parseError } from "../helpers.ts/error";
+import { parseError, asyncHandler } from "../helpers.ts/error";
 
 const router = Router();
 
-router.get("/topup/:amount", async (req, res) => {
-  const topupResponse = await topupAccount({
-    amountDecimal: Number(req.params.amount),
-  });
-  res.json({
-    topupResponse,
-  });
-});
+router.get(
+  "/topup/:amount",
+  asyncHandler(async (req, res) => {
+    const depositQr = await topupAccount({
+      amountDecimal: Number(req.params.amount),
+    });
+    res.json({
+      depositQr,
+    });
+  })
+);
 
-router.get("/pay-pix", async (req, res) => {
-  if (req.query.qrCode) {
-    try {
+router.get(
+  "/pay-pix",
+  asyncHandler(async (req, res) => {
+    if (req.query.qrCode) {
       const lookupResponse = await lookupPixQr(req.query.qrCode as string);
-      res.json({
+      return res.json({
         lookupResponse,
       });
-    } catch (error) {
-      const parsedError = parseError(error);
-      res.status(500).json({ error: parsedError });
     }
-  }
-  if (req.query.pixKey && req.query.amount) {
-    try {
-      const paymentResponse = await payStaticPix({
+
+    if (req.query.pixKey && req.query.amount) {
+      const success = await payStaticPix({
         pixKey: req.query.pixKey as string,
         amountDecimal: Number(req.query.amount),
       });
-      res.json({
-        paymentResponse,
+      return res.json({
+        success,
       });
-    } catch (error) {
-      const parsedError = parseError(error);
-      res.status(500).json({ error: parsedError });
     }
-  }
-  res.status(400).json({ error: "Missing pixKey + amount or qrCode" });
-});
+
+    res.status(400).json({ error: "Missing pixKey + amount, or qrCode" });
+  })
+);
 
 export default router;

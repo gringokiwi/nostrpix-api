@@ -1,4 +1,5 @@
 import { AxiosError } from "axios";
+import { Request, Response, NextFunction } from "express";
 
 export const parseError = (
   error: unknown
@@ -38,4 +39,18 @@ export const parseError = (
     };
   }
   return { message: "An unknown error occurred" };
+};
+
+export const asyncHandler = (
+  fn: (req: Request, res: Response, next: NextFunction) => Promise<any>
+) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await fn(req, res, next);
+    } catch (error) {
+      if (!res.headersSent) {
+        res.status(500).json({ error: parseError(error) });
+      }
+    }
+  };
 };
