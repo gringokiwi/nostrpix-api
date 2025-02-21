@@ -15,6 +15,7 @@
   },
   "homepage": "https://github.com/gringokiwi/nostrpix-api#readme",
   "dependencies": {
+    "@supabase/supabase-js": "^2.48.1",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/node": "^22.13.4",
