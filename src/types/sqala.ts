@@ -1,4 +1,4 @@
-export interface DepositResponse {
+export interface SqalaDepositResponse {
   id: string;
   code: string;
   method: string;
@@ -17,7 +17,7 @@ export interface DepositResponse {
   receiptUrl: string | null;
 }
 
-export interface DictLookupResponse {
+export interface SqalaDictLookupResponse {
   dictId: string;
   amount: number;
   hash: string;
@@ -35,7 +35,7 @@ export interface DictLookupResponse {
   };
 }
 
-export interface WithdrawalResponse {
+export interface SqalaWithdrawalResponse {
   id: string;
   code: string;
   amount: number;
@@ -67,6 +67,6 @@ export interface WithdrawalResponse {
   };
 }
 
-export interface BalanceResponse {
+export interface SqalaBalanceResponse {
   available: number;
 }
