@@ -53,10 +53,11 @@ router.get(
     const { adjusted_amount_sats } = await validate_pix_amount(
       amount_brl_decimal
     );
-    res.json({
+    const response = {
       amount_brl: amount_brl_decimal,
       amount_sats: adjusted_amount_sats,
-    });
+    };
+    res.json(response);
   })
 );
 
@@ -77,11 +78,12 @@ router.get(
     const user = await get_user(String(req.params.user_id));
     const pix_payments = await list_user_pix_payments(user.id);
     const lightning_deposits = await list_user_lightning_deposits(user.id);
-    return res.json({
+    const response = {
       user,
       pix_payments,
       lightning_deposits,
-    });
+    };
+    return res.json(response);
   })
 );
 
@@ -95,11 +97,12 @@ router.get(
     const user = await get_user(String(req.params.user_id));
     const pix_payments = await list_user_pix_payments(user.id);
     const lightning_deposits = await list_user_lightning_deposits(user.id);
-    return res.json({
+    const response = {
       user,
       pix_payments,
       lightning_deposits,
-    });
+    };
+    return res.json(response);
   })
 );
 

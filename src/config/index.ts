@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-export const port = process.env.PORT || 3000;
+export const port = process.env.PORT || 3001;
 export const sqala_base_url = process.env.SQALA_BASE_URL;
 export const sqala_app_id = process.env.SQALA_APP_ID;
 export const sqala_app_secret = process.env.SQALA_APP_SECRET;
