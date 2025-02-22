@@ -49,7 +49,7 @@ export const validate_pix_key = (
   });
 };
 
-export const pix_amount_minimum = 15;
+export const pix_amount_minimum = 0.01;
 export const pix_amount_maximum = 150;
 
 export const validate_pix_amount = async (
