@@ -1,11 +1,7 @@
 import { AxiosError } from "axios";
 import { Request, Response, NextFunction } from "express";
 import { debug } from "../config";
-
-type FormattedError = {
-  message: string;
-  metadata?: { [key: string]: unknown };
-};
+import { FormattedError } from "../types/error";
 
 export const parse_error = (error: unknown): FormattedError => {
   let formatted_error: FormattedError = {

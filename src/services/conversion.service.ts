@@ -1,10 +1,8 @@
-// src/services/conversion.service.ts
 import axios from "axios";
 import cache from "./cache.service";
-import { BTCPriceData } from "../types/BTCPriceData";
+import { BtcPriceData } from "../types/btc_price_data";
 
-// Function to fetch Bitcoin price in BRL from CoinGecko
-export const fetchBTCPriceInBRL = async (): Promise<BTCPriceData> => {
+export const fetch_btc_btc_price_brl = async (): Promise<BtcPriceData> => {
   try {
     const response = await axios.get(
       "https://api.coingecko.com/api/v3/simple/price",
@@ -12,35 +10,36 @@ export const fetchBTCPriceInBRL = async (): Promise<BTCPriceData> => {
         params: { ids: "bitcoin", vs_currencies: "brl" },
       }
     );
-    const btcPrice = response.data.bitcoin?.brl;
-    if (!btcPrice) {
+    const btc_btc_price_brl = response.data.bitcoin?.brl;
+    if (!btc_btc_price_brl) {
       throw new Error("BTC price not found in response.");
     }
-    return { price: btcPrice, lastUpdated: Date.now() };
+    return { btc_price_brl: btc_btc_price_brl, last_updated: Date.now() };
   } catch (error) {
     console.error("Error fetching BTC price:", error);
     throw error;
   }
 };
 
-// Function to get BTC price data with caching
-export const getBTCPriceData = async (): Promise<BTCPriceData> => {
-  let cachedData = cache.get<BTCPriceData>("btcPriceData");
-  if (cachedData !== undefined) {
+export const get_btc_price_data = async (): Promise<BtcPriceData> => {
+  let cached_price_data = cache.get<BtcPriceData>("btc_price_data");
+  if (cached_price_data !== undefined) {
     console.log("Using cached BTC price data.");
-    return cachedData;
+    return cached_price_data;
   }
-  const priceData = await fetchBTCPriceInBRL();
-  cache.set("btcPriceData", priceData);
-  console.log("Fetched new BTC price data and updated cache:", priceData);
-  return priceData;
+  const fetched_price_data = await fetch_btc_btc_price_brl();
+  cache.set("btc_price_data", fetched_price_data);
+  console.log(
+    "Fetched new BTC price data and updated cache:",
+    fetched_price_data
+  );
+  return fetched_price_data;
 };
 
-// Function to convert BRL to satoshis (1 BTC = 100,000,000 satoshis)
-export const convertBRLToSats = (
-  brlAmount: number,
-  btcPrice: number
+export const convert_brl_to_sats = (
+  amount_brl_decimal: number,
+  btc_btc_price_brl: number
 ): number => {
-  const sats = (brlAmount / btcPrice) * 100_000_000;
+  const sats = (amount_brl_decimal / btc_btc_price_brl) * 100_000_000;
   return Math.floor(sats);
 };
