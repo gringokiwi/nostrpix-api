@@ -6,15 +6,21 @@ import {
   sqala_refresh_token,
 } from "../config";
 import { encode } from "base-64";
-import { validate_pix_key, validate_pix_amount } from "../helpers.ts/pix";
+import { validate_pix_key, validate_pix_amount } from "./pix.service";
 import {
   SqalaBalanceResponse,
   SqalaDepositResponse,
   SqalaDictLookupResponse,
   SqalaWithdrawalResponse,
 } from "../types/sqala";
-import { get_user, record_user_pix_payment } from "./database.service";
-import { UserPixPayment } from "../types/database";
+import {
+  get_user,
+  insert_user_pix_payment,
+  update_user_balance_sats,
+} from "./supabase.service";
+import { UserPixPayment } from "../types/supabase";
+import { CustomError } from "./error.service";
+import { check_lightning_deposit_statuses } from "./strike.service";
 
 const sqala_api_client = axios.create({
   baseURL: sqala_base_url,
@@ -50,7 +56,11 @@ const get_access_token = async (): Promise<string> => {
     refreshToken: sqala_refresh_token,
   });
   if (!response.data?.token) {
-    throw new Error("Invalid token response from server");
+    throw new CustomError(
+      "Could not connect to Pix service",
+      {},
+      response.data
+    );
   }
   access_token = response.data.token as string;
   token_expiry_time = Date.now() + response.data.expiresIn * 1000;
@@ -65,19 +75,13 @@ export const get_admin_deposit_qr = async ({
   adjusted_amount_brl: number;
   deposit_qr_code: string;
 }> => {
-  const { is_valid, adjusted_amount_brl_cents, adjusted_amount_brl_decimal } =
+  const { adjusted_amount_brl_cents, adjusted_amount_brl_decimal } =
     await validate_pix_amount(amount_brl_decimal, true);
-  if (!is_valid) {
-    throw new Error("Invalid amount");
-  }
   const { payload: deposit_qr_code } = await sqala_api_client
     .post(`/pix-qrcode-payments`, {
       amount: adjusted_amount_brl_cents,
     })
-    .then((response) => response.data as SqalaDepositResponse)
-    .catch((error) => {
-      throw error;
-    });
+    .then((response) => response.data as SqalaDepositResponse);
   return { adjusted_amount_brl: adjusted_amount_brl_decimal, deposit_qr_code };
 };
 
@@ -86,10 +90,7 @@ export const get_admin_balance_brl = async (): Promise<{
 }> => {
   const { available: balance_brl_cents } = await sqala_api_client
     .get(`/recipients/DEFAULT/balance`)
-    .then((response) => response.data as SqalaBalanceResponse)
-    .catch((error) => {
-      throw error;
-    });
+    .then((response) => response.data as SqalaBalanceResponse);
   return { balance_brl: balance_brl_cents / 100 };
 };
 
@@ -104,32 +105,30 @@ export const pay_pix_via_qr = async ({
     status: string;
   }
 > => {
-  const { balance_sats } = await get_user({ user_id });
-  if (!balance_sats) {
-    throw new Error("User has no balance");
-  }
+  await check_lightning_deposit_statuses(user_id);
+  const { balance_sats } = await get_user(user_id);
   const {
     hash,
-    amount: original_amount_brl_cents,
+    amount: amount_brl_cents,
     key: pix_key,
     recipient: { name: payee_name },
   } = await sqala_api_client
     .get(`/dict/barcode?qrcode=${qr_code}`)
-    .then((response) => response.data as SqalaDictLookupResponse)
-    .catch((error) => {
-      throw error;
-    });
-  const original_amount_brl_decimal = original_amount_brl_cents / 100;
-  const { is_valid, adjusted_amount_brl_decimal, adjusted_amount_sats } =
-    await validate_pix_amount(original_amount_brl_decimal / 100);
-  if (!is_valid) {
-    throw new Error("Invalid amount");
-  }
+    .then((response) => response.data as SqalaDictLookupResponse);
+  const amount_brl_decimal = amount_brl_cents / 100;
+  const { adjusted_amount_sats } = await validate_pix_amount(
+    amount_brl_decimal
+  );
   if (adjusted_amount_sats > balance_sats) {
-    throw new Error(
-      `Insufficient balance (have ${balance_sats} sats, need ${adjusted_amount_sats} sats - need to top up ${
-        adjusted_amount_sats - balance_sats
-      } sats)`
+    const minimum_topup_amount = adjusted_amount_sats - balance_sats;
+    const recommended_topup_amount = Math.floor(minimum_topup_amount * 1.05);
+    throw new CustomError(
+      `Insufficient balance for payment - have ${balance_sats} sats, need >${adjusted_amount_sats} sats - need to top up ~${recommended_topup_amount} sats`,
+      {
+        balance_sats,
+        minimum_topup_amount,
+        recommended_topup_amount,
+      }
     );
   }
   const { status, id: sqala_id } = await sqala_api_client
@@ -137,19 +136,19 @@ export const pay_pix_via_qr = async ({
       method: "PIX_QRCODE",
       pixQrCode: qr_code,
       hash,
-      amount: original_amount_brl_cents,
+      amount: amount_brl_cents,
     })
-    .then((response) => response.data as SqalaWithdrawalResponse)
-    .catch((error) => {
-      throw error;
-    });
-  const pix_payment_record = await record_user_pix_payment({
-    amount_brl: original_amount_brl_decimal / 100,
+    .then((response) => response.data as SqalaWithdrawalResponse);
+  await update_user_balance_sats(user_id, -adjusted_amount_sats);
+  const pix_payment_record = await insert_user_pix_payment({
+    amount_brl: amount_brl_decimal,
+    amount_sats: adjusted_amount_sats,
     payee_name,
     pix_key,
     pix_qr_code: qr_code,
     sqala_id,
     user_id,
+    paid: true,
   });
   return { ...pix_payment_record, status };
 };
@@ -167,30 +166,24 @@ export const pay_pix_via_key = async ({
     status: string;
   }
 > => {
-  const { balance_sats } = await get_user({ user_id });
-  if (!balance_sats) {
-    throw new Error("User has no balance");
-  }
-  const {
-    is_valid: is_valid_amount,
-    amount_brl_cents,
-    adjusted_amount_sats,
-  } = await validate_pix_amount(amount_brl_decimal);
-  if (!is_valid_amount) {
-    throw new Error("Invalid amount");
-  }
+  await check_lightning_deposit_statuses(user_id);
+  const { balance_sats } = await get_user(user_id);
+  const { amount_brl_cents, adjusted_amount_sats } = await validate_pix_amount(
+    amount_brl_decimal
+  );
   if (adjusted_amount_sats > balance_sats) {
-    throw new Error(
-      `Insufficient balance (have ${balance_sats} sats, need ${adjusted_amount_sats} sats - need to top up ${
-        adjusted_amount_sats - balance_sats
-      } sats)`
+    const minimum_topup_amount = adjusted_amount_sats - balance_sats;
+    const recommended_topup_amount = Math.floor(minimum_topup_amount * 1.05);
+    throw new CustomError(
+      `Insufficient balance for payment - have ${balance_sats} sats, need >${adjusted_amount_sats} sats - need to top up ~${recommended_topup_amount} sats`,
+      {
+        balance_sats,
+        minimum_topup_amount,
+        recommended_topup_amount,
+      }
     );
   }
-  const { is_valid: is_valid_pix_key, formatted_key } =
-    validate_pix_key(pix_key);
-  if (!is_valid_pix_key) {
-    throw new Error("Invalid pix key");
-  }
+  const { formatted_key } = validate_pix_key(pix_key);
   const {
     status,
     id: sqala_id,
@@ -201,16 +194,16 @@ export const pay_pix_via_key = async ({
       amount: amount_brl_cents,
       pixKey: formatted_key,
     })
-    .then((response) => response.data as SqalaWithdrawalResponse)
-    .catch((error) => {
-      throw error;
-    });
-  const pix_payment_record = await record_user_pix_payment({
+    .then((response) => response.data as SqalaWithdrawalResponse);
+  await update_user_balance_sats(user_id, -adjusted_amount_sats);
+  const pix_payment_record = await insert_user_pix_payment({
     amount_brl: amount_brl_decimal,
+    amount_sats: adjusted_amount_sats,
     payee_name,
     pix_key,
     user_id,
     sqala_id,
+    paid: true,
   });
   return { ...pix_payment_record, status };
 };

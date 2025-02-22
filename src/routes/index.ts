@@ -5,42 +5,21 @@ import {
   pay_pix_via_qr,
   pay_pix_via_key,
 } from "../services/sqala.service";
-import { async_handler } from "../helpers.ts/error";
+import { async_handler, CustomError } from "../services/error.service";
 import {
+  insert_user,
   get_user,
-  link_public_key_to_user,
   list_user_lightning_deposits,
   list_user_pix_payments,
-} from "../services/database.service";
+} from "../services/supabase.service";
+import { validate_pix_amount } from "../services/pix.service";
 import {
-  convert_brl_to_sats,
-  get_btc_price_data,
-} from "../services/conversion.service";
-import { validate_pix_amount } from "../helpers.ts/pix";
+  check_lightning_deposit_status,
+  check_lightning_deposit_statuses,
+  generate_lightning_deposit,
+} from "../services/strike.service";
 
 const router = Router();
-
-router.get(
-  "/quote/:amount_brl_decimal",
-  async_handler(async (req: Request, res: Response) => {
-    const amount_brl_decimal = Number(req.params.amount_brl_decimal);
-    if (isNaN(amount_brl_decimal)) {
-      throw new Error(
-        "Please provide a decimal amount in BRL, e.g. /convert/21.21"
-      );
-    }
-    const { is_valid, adjusted_amount_sats } = await validate_pix_amount(
-      amount_brl_decimal
-    );
-    if (!is_valid) {
-      throw new Error("Invalid amount");
-    }
-    res.json({
-      amount_brl: amount_brl_decimal,
-      amount_sats: adjusted_amount_sats,
-    });
-  })
-);
 
 router.get(
   "/admin/balance",
@@ -53,34 +32,49 @@ router.get(
 router.get(
   "/admin/deposit",
   async_handler(async (req, res) => {
-    if (isNaN(Number(req.query.amount))) {
-      return res.status(400).json({
-        error: "Amount must be a number",
-      });
+    const amount_brl_decimal = Number(req.query.amount_brl);
+    if (isNaN(amount_brl_decimal)) {
+      throw new CustomError(`Invalid or missing 'amount_brl'`);
     }
     const response = await get_admin_deposit_qr({
-      amount_brl_decimal: Number(req.query.amount),
+      amount_brl_decimal,
     });
     res.json(response);
   })
 );
 
 router.get(
-  "/user/login",
+  "/quote",
+  async_handler(async (req: Request, res: Response) => {
+    const amount_brl_decimal = Number(req.query.amount_brl);
+    if (isNaN(amount_brl_decimal)) {
+      throw new CustomError(`Invalid or missing 'amount_brl'`);
+    }
+    const { adjusted_amount_sats } = await validate_pix_amount(
+      amount_brl_decimal
+    );
+    res.json({
+      amount_brl: amount_brl_decimal,
+      amount_sats: adjusted_amount_sats,
+    });
+  })
+);
+
+router.get(
+  "/user/new",
   async_handler(async (req, res) => {
-    if (req.query.user_id) {
-      const response = await get_user({
-        user_id: String(req.query.user_id),
-      });
-      return res.json(response);
+    const user = await insert_user();
+    return res.json(user);
+  })
+);
+
+router.get(
+  "/user/:user_id/details",
+  async_handler(async (req, res) => {
+    if (!req.params.user_id) {
+      throw new CustomError(`Missing 'user_id'`);
     }
-    if (req.query.public_key) {
-      const response = await get_user({
-        public_key: String(req.query.public_key),
-      });
-      return res.json(response);
-    }
-    const user = await get_user({});
+    const user = await get_user(String(req.params.user_id));
     const pix_payments = await list_user_pix_payments(user.id);
     const lightning_deposits = await list_user_lightning_deposits(user.id);
     return res.json({
@@ -92,59 +86,78 @@ router.get(
 );
 
 router.get(
-  "/user/link",
+  "/user/:user_id/details/refresh",
   async_handler(async (req, res) => {
-    if (!req.query.user_id || !req.query.public_key) {
-      throw new Error("Missing user_id and/or public_key");
+    if (!req.params.user_id) {
+      throw new CustomError(`Missing 'user_id'`);
     }
-    const response = await link_public_key_to_user({
-      user_id: String(req.query.user_id),
-      public_key: String(req.query.public_key),
-    });
-    return res.json(response);
-  })
-);
-
-router.get(
-  "/user/deposit",
-  async_handler(async (req, res) => {
-    if (!req.query.user_id && !req.query.public_key) {
-      throw new Error("Missing user_id or public_key");
-    }
-    const user = await get_user({
-      user_id: String(req.query.user_id),
-      public_key: String(req.query.public_key),
-    });
-    res.status(500).json({
-      error: "Not implemented",
+    await check_lightning_deposit_statuses(String(req.params.user_id));
+    const user = await get_user(String(req.params.user_id));
+    const pix_payments = await list_user_pix_payments(user.id);
+    const lightning_deposits = await list_user_lightning_deposits(user.id);
+    return res.json({
       user,
+      pix_payments,
+      lightning_deposits,
     });
   })
 );
 
 router.get(
-  "/user/pay",
+  "/user/:user_id/deposit/new",
   async_handler(async (req, res) => {
-    if (!req.query.user_id) {
-      throw new Error("Missing user_id");
+    if (!req.params.user_id) {
+      throw new CustomError(`Missing 'user_id'`);
+    }
+    const amount_sats = Number(req.query.amount_sats);
+    if (isNaN(amount_sats)) {
+      throw new CustomError(`Missing 'amount_sats'`);
+    }
+    const response = await generate_lightning_deposit(
+      amount_sats,
+      String(req.params.user_id)
+    );
+    res.json(response);
+  })
+);
+
+router.get(
+  "/user/:user_id/deposit/:lnurl",
+  async_handler(async (req, res) => {
+    if (!req.params.lnurl) {
+      throw new CustomError(`Missing 'lnurl'`);
+    }
+    const response = await check_lightning_deposit_status(
+      String(req.params.lnurl)
+    );
+    res.json(response);
+  })
+);
+
+router.get(
+  "/user/:user_id/pay",
+  async_handler(async (req, res) => {
+    if (!req.params.user_id) {
+      throw new CustomError(`Missing 'user_id'`);
     }
     if (!req.query.qr_code && !req.query.pix_key) {
-      throw new Error("Must include either qr_code or pix_key");
+      throw new CustomError(`Missing 'qr_code' or 'pix_key'`);
     }
     if (req.query.qr_code) {
       const response = await pay_pix_via_qr({
         qr_code: String(req.query.qr_code),
-        user_id: String(req.query.user_id),
+        user_id: String(req.params.user_id),
       });
       return res.json(response);
     }
-    if (isNaN(Number(req.query.amount))) {
-      throw new Error("Amount must be a number");
+    const amount_brl_decimal = Number(req.query.amount_brl);
+    if (isNaN(amount_brl_decimal)) {
+      throw new CustomError(`Invalid or missing 'amount_brl'`);
     }
     const response = await pay_pix_via_key({
       pix_key: String(req.query.pix_key),
-      amount_brl_decimal: Number(req.query.amount),
-      user_id: String(req.query.user_id),
+      amount_brl_decimal,
+      user_id: String(req.params.user_id),
     });
     return res.json(response);
   })

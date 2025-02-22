@@ -2,10 +2,8 @@ import { cpf, cnpj } from "cpf-cnpj-validator";
 import { phone } from "phone";
 import * as email_validator from "email-validator";
 import { validate as uuidValidate } from "uuid";
-import {
-  convert_brl_to_sats,
-  get_btc_price_data,
-} from "../services/conversion.service";
+import { convert_brl_to_sats, get_btc_price_data } from "./conversion.service";
+import { CustomError } from "./error.service";
 
 export const validate_pix_key = (
   pix_key: string
@@ -46,10 +44,13 @@ export const validate_pix_key = (
       formatted_key: pix_key,
     };
   }
-  return {
-    is_valid: false,
-  };
+  throw new CustomError("Invalid 'pix_key'", {
+    pix_key,
+  });
 };
+
+export const pix_amount_minimum = 15;
+export const pix_amount_maximum = 150;
 
 export const validate_pix_amount = async (
   amount_brl_decimal: number,
@@ -62,24 +63,33 @@ export const validate_pix_amount = async (
   adjusted_amount_brl_decimal: number;
   adjusted_amount_sats: number;
 }> => {
-  if (!override_limits && amount_brl_decimal < 15) {
-    throw new Error("Amount must be greater than 15");
+  if (!override_limits && amount_brl_decimal < pix_amount_minimum) {
+    throw new CustomError(
+      `'amount' must be greater than ${pix_amount_minimum}`,
+      {
+        pix_amount_minimum,
+      }
+    );
   }
-  if (!override_limits && amount_brl_decimal > 150) {
-    throw new Error("Amount must be less than 150");
+  if (!override_limits && amount_brl_decimal > pix_amount_maximum) {
+    throw new CustomError(`'amount' must be lower than ${pix_amount_maximum}`, {
+      pix_amount_maximum,
+    });
   }
   // Account for Sqala's 1% fee
-  const adjusted_amount_brl_decimal = amount_brl_decimal / (1 - 0.01);
+  const amount_brl_cents = amount_brl_decimal * 100;
+  const adjusted_amount_brl_decimal =
+    Math.round(amount_brl_cents / (1 - 0.01)) / 100;
   const adjusted_amount_brl_cents = adjusted_amount_brl_decimal * 100;
   const { btc_price_brl } = await get_btc_price_data();
   const adjusted_amount_sats = convert_brl_to_sats(
     // Adjust for 5% BTCBRL spread
-    adjusted_amount_brl_decimal / (1 - 0.05),
+    Math.floor(adjusted_amount_brl_decimal / (1 - 0.05)),
     btc_price_brl
   );
   return {
     is_valid: true,
-    amount_brl_cents: amount_brl_decimal * 100,
+    amount_brl_cents,
     amount_brl_decimal,
     adjusted_amount_brl_cents,
     adjusted_amount_brl_decimal,
