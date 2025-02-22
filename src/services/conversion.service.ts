@@ -16,7 +16,6 @@ export const fetch_btc_btc_price_brl = async (): Promise<BtcPriceData> => {
     }
     return { btc_price_brl: btc_btc_price_brl, last_updated: Date.now() };
   } catch (error) {
-    console.error("Error fetching BTC price:", error);
     throw error;
   }
 };
@@ -24,15 +23,10 @@ export const fetch_btc_btc_price_brl = async (): Promise<BtcPriceData> => {
 export const get_btc_price_data = async (): Promise<BtcPriceData> => {
   let cached_price_data = cache.get<BtcPriceData>("btc_price_data");
   if (cached_price_data !== undefined) {
-    console.log("Using cached BTC price data.");
     return cached_price_data;
   }
   const fetched_price_data = await fetch_btc_btc_price_brl();
   cache.set("btc_price_data", fetched_price_data);
-  console.log(
-    "Fetched new BTC price data and updated cache:",
-    fetched_price_data
-  );
   return fetched_price_data;
 };
 

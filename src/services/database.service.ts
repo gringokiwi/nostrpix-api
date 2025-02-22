@@ -17,7 +17,6 @@ export const get_user = async ({
   user_id?: string;
   public_key?: string;
 }): Promise<User> => {
-  console.log("HERE", user_id, public_key);
   if (user_id) {
     const { data, error } = await supabase
       .from("users")
