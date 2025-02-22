@@ -1,6 +1,6 @@
 import axios from "axios";
 import cache from "./cache.service";
-import { BtcPriceData } from "../types/btc_price_data";
+import { BtcPriceData } from "../types/btc-price-data";
 
 export const fetch_btc_btc_price_brl = async (): Promise<BtcPriceData> => {
   try {
