@@ -1,4 +1,4 @@
-import { Router, Request, Response, NextFunction } from "express";
+import { Router, Request, Response } from "express";
 import {
   get_admin_deposit_qr,
   get_admin_balance_brl,
@@ -13,44 +13,32 @@ import {
   list_user_pix_payments,
 } from "../services/database.service";
 import {
-  convertBRLToSats,
-  getBTCPriceData,
+  convert_brl_to_sats,
+  get_btc_price_data,
 } from "../services/conversion.service";
+import { validate_pix_amount } from "../helpers.ts/pix";
 
 const router = Router();
 
 router.get(
-  "/convert-sats",
+  "/quote/:amount_brl_decimal",
   async_handler(async (req: Request, res: Response) => {
-    const brlQuery = req.query.brl;
-    if (!brlQuery) {
-      res.status(400).json({
-        error:
-          "Please provide a 'brl' query parameter, e.g., /convert-sats?brl=100",
-      });
-      return;
+    const amount_brl_decimal = Number(req.params.amount_brl_decimal);
+    if (isNaN(amount_brl_decimal)) {
+      throw new Error(
+        "Please provide a decimal amount in BRL, e.g. /convert/21.21"
+      );
     }
-    const brlAmount = parseFloat(brlQuery as string);
-    if (isNaN(brlAmount)) {
-      res.status(400).json({ error: "Invalid BRL amount provided." });
-      return;
+    const { is_valid, adjusted_amount_sats } = await validate_pix_amount(
+      amount_brl_decimal
+    );
+    if (!is_valid) {
+      throw new Error("Invalid amount");
     }
-    try {
-      // Get the cached price data (price + last updated timestamp)
-      const btcPriceData = await getBTCPriceData();
-      const sats = convertBRLToSats(brlAmount, btcPriceData.price);
-      res.json({
-        brl: brlAmount,
-        btcPriceInBRL: btcPriceData.price,
-        sats,
-        lastUpdatedTime: btcPriceData.lastUpdated,
-      });
-    } catch (error) {
-      console.error("Error during conversion:", error);
-      res.status(500).json({
-        error: "Failed to convert BRL to satoshis. Please try again later.",
-      });
-    }
+    res.json({
+      amount_brl: amount_brl_decimal,
+      amount_sats: adjusted_amount_sats,
+    });
   })
 );
 
@@ -71,7 +59,7 @@ router.get(
       });
     }
     const response = await get_admin_deposit_qr({
-      amount_decimal: Number(req.query.amount),
+      amount_brl_decimal: Number(req.query.amount),
     });
     res.json(response);
   })
@@ -106,34 +94,30 @@ router.get(
 router.get(
   "/user/link",
   async_handler(async (req, res) => {
-    if (req.query.user_id && req.query.public_key) {
-      const response = await link_public_key_to_user({
-        user_id: String(req.query.user_id),
-        public_key: String(req.query.public_key),
-      });
-      return res.json(response);
+    if (!req.query.user_id || !req.query.public_key) {
+      throw new Error("Missing user_id and/or public_key");
     }
-    res.status(400).json({
-      error: "Missing user_id and/or public_key",
+    const response = await link_public_key_to_user({
+      user_id: String(req.query.user_id),
+      public_key: String(req.query.public_key),
     });
+    return res.json(response);
   })
 );
 
 router.get(
   "/user/deposit",
   async_handler(async (req, res) => {
-    if (req.query.user_id || req.query.public_key) {
-      const user = await get_user({
-        user_id: String(req.query.user_id),
-        public_key: String(req.query.public_key),
-      });
-      res.status(500).json({
-        error: "Not implemented",
-        user,
-      });
+    if (!req.query.user_id && !req.query.public_key) {
+      throw new Error("Missing user_id or public_key");
     }
-    res.status(400).json({
-      error: "Missing user_id or public_key",
+    const user = await get_user({
+      user_id: String(req.query.user_id),
+      public_key: String(req.query.public_key),
+    });
+    res.status(500).json({
+      error: "Not implemented",
+      user,
     });
   })
 );
@@ -141,20 +125,28 @@ router.get(
 router.get(
   "/user/pay",
   async_handler(async (req, res) => {
-    if (req.query.qr_code) {
-      const response = await pay_pix_via_qr(String(req.query.qr_code));
-      return res.json(response);
+    if (!req.query.user_id) {
+      throw new Error("Missing user_id");
     }
-    if (req.query.pix_key && !isNaN(Number(req.query.amount))) {
-      const response = await pay_pix_via_key({
-        pix_key: String(req.query.pix_key),
-        amount_decimal: Number(req.query.amount),
+    if (!req.query.qr_code && !req.query.pix_key) {
+      throw new Error("Must include either qr_code or pix_key");
+    }
+    if (req.query.qr_code) {
+      const response = await pay_pix_via_qr({
+        qr_code: String(req.query.qr_code),
+        user_id: String(req.query.user_id),
       });
       return res.json(response);
     }
-    res.status(400).json({
-      error: "Missing either qr_code, or both/either pix_key and amount",
+    if (isNaN(Number(req.query.amount))) {
+      throw new Error("Amount must be a number");
+    }
+    const response = await pay_pix_via_key({
+      pix_key: String(req.query.pix_key),
+      amount_brl_decimal: Number(req.query.amount),
+      user_id: String(req.query.user_id),
     });
+    return res.json(response);
   })
 );
 
