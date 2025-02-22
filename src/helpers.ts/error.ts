@@ -1,9 +1,32 @@
 import { AxiosError } from "axios";
 import { Request, Response, NextFunction } from "express";
-import { debug } from "../config";
+import { show_debug_data } from "../config";
 import { FormattedError } from "../types/error";
 
+export class CustomError extends Error {
+  user_data?: { [key: string]: unknown };
+  debug_data?: { [key: string]: unknown };
+  constructor(
+    message: FormattedError["message"],
+    user_data?: FormattedError["user_data"],
+    debug_data?: FormattedError["debug_data"]
+  ) {
+    super(message);
+    this.name = "CustomError";
+    this.user_data = user_data;
+    this.debug_data = debug_data;
+  }
+}
+
 export const parse_error = (error: unknown): FormattedError => {
+  if (error instanceof CustomError) {
+    return {
+      message: error.message,
+      user_data: error.user_data ? error.user_data : undefined,
+      debug_data:
+        error.debug_data && show_debug_data ? error.debug_data : undefined,
+    };
+  }
   let formatted_error: FormattedError = {
     message: "An unknown error occurred",
   };
@@ -18,7 +41,8 @@ export const parse_error = (error: unknown): FormattedError => {
   }
   if (typeof error === "string") {
     try {
-      formatted_error = JSON.parse(error);
+      const json = JSON.parse(error);
+      formatted_error = parse_error(json);
     } catch (e) {
       formatted_error = { message: error };
     }
@@ -28,17 +52,23 @@ export const parse_error = (error: unknown): FormattedError => {
     if (typecasted_error.error) {
       formatted_error = parse_error(typecasted_error.error);
     }
-    formatted_error.metadata = error as { [key: string]: unknown };
+    formatted_error.debug_data = error as { [key: string]: unknown };
   }
   if (
-    formatted_error.metadata?.code &&
-    typeof formatted_error.metadata.code === "string"
+    formatted_error.debug_data?.code &&
+    typeof formatted_error.debug_data.code === "string"
   ) {
-    formatted_error.message = formatted_error.metadata.code;
+    formatted_error.message = formatted_error.debug_data.code;
   }
   return {
     message: formatted_error.message,
-    metadata: debug ? formatted_error.metadata : undefined,
+    user_data: formatted_error.user_data
+      ? formatted_error.user_data
+      : undefined,
+    debug_data:
+      formatted_error.debug_data && show_debug_data
+        ? formatted_error.debug_data
+        : undefined,
   };
 };
 
