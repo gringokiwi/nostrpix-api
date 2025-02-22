@@ -4,13 +4,9 @@ import { BtcPriceData } from "../types/btc-price-data";
 import { CustomError } from "./error.service";
 
 export const fetch_btc_price_brl = async (): Promise<BtcPriceData> => {
-  const response = await axios.get(
-    "https://api.coingecko.com/api/v3/simple/price",
-    {
-      params: { ids: "bitcoin", vs_currencies: "brl" },
-    }
-  );
-  const btc_price_brl = response.data.bitcoin?.brl;
+  const response = await axios.get("https://mempool.space/api/v1/prices");
+  const btc_price_usd = Number(response.data.USD);
+  const btc_price_brl = btc_price_usd * 5.7;
   if (!btc_price_brl) {
     throw new CustomError("Could not fetch BTC price", {}, response.data);
   }
