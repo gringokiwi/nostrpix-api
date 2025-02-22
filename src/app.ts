@@ -3,6 +3,8 @@ import cors from "cors";
 import helmet from "helmet";
 import routes from "./routes";
 import { port } from "./config";
+import strikeInvoiceRoute from "./routes/strikeInvoiceRoute";
+import strikeQuoteRoute from "./routes/strikeQuoteRoute";
 
 const app = express();
 
@@ -11,6 +13,8 @@ app.use(cors());
 app.use(express.json());
 
 app.use("/", routes);
+app.use("/", strikeInvoiceRoute);
+app.use("/", strikeQuoteRoute);
 
 app.use(
   (
