@@ -122,6 +122,15 @@ export const pay_pix_via_qr = async ({
   if (adjusted_amount_sats > balance_sats) {
     const minimum_topup_amount = adjusted_amount_sats - balance_sats;
     const recommended_topup_amount = Math.floor(minimum_topup_amount * 1.05);
+    const maximum_topup_amount = 10000; // in sats
+
+    if (recommended_topup_amount > maximum_topup_amount) {
+      throw new CustomError(
+        `The recommended top-up amount (${recommended_topup_amount} sats) exceeds the maximum allowed limit of ${maximum_topup_amount} sats.`,
+        { recommended_topup_amount, maximum_topup_amount }
+      );
+    }
+    
     throw new CustomError(
       `Insufficient balance for payment - have ${balance_sats} sats, need >${adjusted_amount_sats} sats - need to top up ~${recommended_topup_amount} sats`,
       {
