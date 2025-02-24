@@ -7,7 +7,6 @@ import {
   list_user_lightning_deposits,
   insert_user_lightning_deposit,
   update_user_lightning_deposit_paid,
-  update_user_balance_sats,
 } from "./supabase.service";
 import { UserLightningDeposit } from "../types/supabase";
 import { CustomError } from "./error.service";
@@ -60,22 +59,26 @@ export const check_lightning_deposit_statuses = async (
     ({ paid }) => !paid
   );
   const updated_lightning_deposits = await Promise.all(
-    unpaid_lightning_deposits.map(
-      async ({ id: lightning_deposit_id, strike_id, amount_sats }) => {
-        const { state } = await strike_api_client
-          .get(`/invoices/${strike_id}`)
-          .then((response) => response.data as StrikeInvoice);
+    unpaid_lightning_deposits.map(async (lightning_deposit) => {
+      const {
+        id: lightning_deposit_id,
+        strike_id,
+        amount_sats,
+      } = lightning_deposit;
+      const { state } = await strike_api_client
+        .get(`/invoices/${strike_id}`)
+        .then((response) => response.data as StrikeInvoice);
+      if (state === "PAID") {
         const updated_lightning_deposit =
           await update_user_lightning_deposit_paid(
             lightning_deposit_id,
-            state === "PAID"
+            user_id,
+            amount_sats
           );
-        if (updated_lightning_deposit.paid) {
-          await update_user_balance_sats(user_id, amount_sats);
-        }
         return updated_lightning_deposit;
       }
-    )
+      return lightning_deposit;
+    })
   );
   return updated_lightning_deposits;
 };

@@ -34,13 +34,12 @@ export const update_user_balance_sats = async (
   user_id: string,
   balance_change_sats: number
 ): Promise<User> => {
-  const { balance_sats: current_balance_sats } = await get_user(user_id);
-  const updated_balance_sats = current_balance_sats + balance_change_sats;
   const { data, error } = await supabase
-    .from("users")
-    .update({ balance_sats: updated_balance_sats })
-    .eq("id", user_id)
-    .select()
+    .rpc("update_user_balance", {
+      p_user_id: user_id,
+      p_balance_change: balance_change_sats,
+    })
+    .returns<User>()
     .single();
   if (error) throw error;
   return data;
@@ -60,13 +59,18 @@ export const insert_user_lightning_deposit = async (
 
 export const update_user_lightning_deposit_paid = async (
   lightning_deposit_id: string,
-  paid: boolean
+  user_id: string,
+  amount_sats: number,
+  update_balance: boolean = true
 ): Promise<UserLightningDeposit> => {
   const { data, error } = await supabase
-    .from("lightning_deposits")
-    .update({ paid })
-    .eq("id", lightning_deposit_id)
-    .select()
+    .rpc("process_lightning_deposit", {
+      p_deposit_id: lightning_deposit_id,
+      p_user_id: user_id,
+      p_amount_sats: amount_sats,
+      p_update_balance: update_balance,
+    })
+    .returns<UserLightningDeposit>()
     .single();
   if (error) throw error;
   return data;
