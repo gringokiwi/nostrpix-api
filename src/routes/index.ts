@@ -102,18 +102,7 @@ router.get(
 router.get(
   "/user/:user_id/deposit/new",
   async_handler(async (req, res) => {
-    if (!req.params.user_id) {
-      throw new CustomError(`Missing 'user_id'`);
-    }
-    const amount_sats = Number(req.query.amount_sats);
-    if (isNaN(amount_sats)) {
-      throw new CustomError(`Missing 'amount_sats'`);
-    }
-    const response = await generate_lightning_deposit(
-      amount_sats,
-      String(req.params.user_id)
-    );
-    res.json(response);
+    res.status(500).send("Disabled");
   })
 );
 
@@ -133,29 +122,7 @@ router.get(
 router.get(
   "/user/:user_id/pay",
   async_handler(async (req, res) => {
-    if (!req.params.user_id) {
-      throw new CustomError(`Missing 'user_id'`);
-    }
-    if (!req.query.qr_code && !req.query.pix_key) {
-      throw new CustomError(`Missing 'qr_code' or 'pix_key'`);
-    }
-    if (req.query.qr_code) {
-      const response = await pay_pix_via_qr({
-        qr_code: String(req.query.qr_code),
-        user_id: String(req.params.user_id),
-      });
-      return res.json(response);
-    }
-    const amount_brl_decimal = Number(req.query.amount_brl);
-    if (isNaN(amount_brl_decimal)) {
-      throw new CustomError(`Invalid or missing 'amount_brl'`);
-    }
-    const response = await pay_pix_via_key({
-      pix_key: String(req.query.pix_key),
-      amount_brl_decimal,
-      user_id: String(req.params.user_id),
-    });
-    return res.json(response);
+    res.status(500).send("Disabled");
   })
 );
 
