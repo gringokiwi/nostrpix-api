@@ -32,14 +32,7 @@ router.get(
 router.get(
   "/admin/deposit",
   async_handler(async (req, res) => {
-    const amount_brl_decimal = Number(req.query.amount_brl);
-    if (isNaN(amount_brl_decimal)) {
-      throw new CustomError(`Invalid or missing 'amount_brl'`);
-    }
-    const response = await get_admin_deposit_qr({
-      amount_brl_decimal,
-    });
-    res.json(response);
+    res.status(500).send("Disabled");
   })
 );
 
