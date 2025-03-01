@@ -18,6 +18,7 @@ import {
   check_lightning_deposit_statuses,
   generate_lightning_deposit,
 } from "../services/strike.service";
+import { get_btc_price_data } from "../services/conversion.service";
 
 const router = Router();
 
@@ -123,6 +124,14 @@ router.get(
   "/user/:user_id/pay",
   async_handler(async (req, res) => {
     res.status(500).send("Disabled");
+  })
+);
+
+router.get(
+  "/bitcoinpricebrl",
+  async_handler(async (req, res) => {
+    const btcbrl = await get_btc_price_data();
+    res.json(btcbrl);
   })
 );
 
